@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tres en Raya</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f4f4f0;
+      color: #1a1a1a;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 20px;
+      padding: 2rem;
+      width: 360px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.5px;
+    }
+
+    .scoreboard {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 1.5rem;
+      background: #f4f4f0;
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+
+    .score-item { text-align: center; }
+    .score-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .score-value { font-size: 1.8rem; font-weight: 600; color: #1a1a1a; }
+    .score-item.x .score-value { color: #185FA5; }
+    .score-item.o .score-value { color: #993C1D; }
+
+    .status-bar {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      min-height: 1.6rem;
+      color: #1a1a1a;
+    }
+
+    .status-bar.win { color: #2d7d46; }
+    .status-bar.draw { color: #7a5c00; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .cell {
+      aspect-ratio: 1;
+      background: #f4f4f0;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      font-size: 2.4rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .cell:hover:not(.taken) { background: #e8e8e4; }
+    .cell:active:not(.taken) { transform: scale(0.95); }
+    .cell.x { color: #185FA5; }
+    .cell.o { color: #993C1D; }
+    .cell.win-cell { background: #e6f4ec; border-color: #2d7d46; }
+
+    .buttons { display: flex; gap: 8px; justify-content: center; }
+
+    button {
+      padding: 10px 24px;
+      border: 2px solid #d0d0cc;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #1a1a1a;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button:hover { background: #f4f4f0; border-color: #aaa; }
+    button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    button.primary:hover { background: #333; border-color: #333; }
+
+    .error-msg { font-size: 13px; color: #c0392b; margin-top: 8px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Tres en Raya</h1>
+
+    <div class="scoreboard">
+      <div class="score-item x">
+        <div class="score-label">Jugador X</div>
+        <div class="score-value" id="score-x">0</div>
+      </div>
+      <div class="score-item">
+        <div class="score-label">Empates</div>
+        <div class="score-value" id="score-draw">0</div>
+      </div>
+      <div class="score-item o">
+        <div class="score-label">Jugador O</div>
+        <div class="score-value" id="score-o">0</div>
+      </div>
+    </div>
+
+    <div class="status-bar" id="status">Turno de X</div>
+
+    <div class="board" id="board">
+      <div class="cell" data-index="0"></div>
+      <div class="cell" data-index="1"></div>
+      <div class="cell" data-index="2"></div>
+      <div class="cell" data-index="3"></div>
+      <div class="cell" data-index="4"></div>
+      <div class="cell" data-index="5"></div>
+      <div class="cell" data-index="6"></div>
+      <div class="cell" data-index="7"></div>
+      <div class="cell" data-index="8"></div>
+    </div>
+
+    <div class="buttons">
+      <button id="btn-reset" class="primary">Nueva partida</button>
+    </div>
+    <div class="error-msg" id="error"></div>
+  </div>
+
+  <script>
+    const sessionId = Math.random().toString(36).slice(2);
+    const scores = { X: 0, O: 0, draw: 0 };
+
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    const boardEl = document.getElementById('board');
+    const cells = Array.from(boardEl.querySelectorAll('.cell'));
+    const btnReset = document.getElementById('btn-reset');
+
+    async function fetchState() {
+      const res = await fetch(`/api/game/${sessionId}`);
+      const data = await res.json();
+      renderState(data.state);
+    }
+
+    async function makeMove(index) {
+      errorEl.textContent = '';
+      const res = await fetch(`/api/game/${sessionId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cellIndex: index }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Error desconocido';
+        return;
+      }
+      renderState(data.state);
+    }
+
+    async function resetGame() {
+      errorEl.textContent = '';
+      const res = await fetch(`/api/game/${sessionId}/reset`, { method: 'POST' });
+      const data = await res.json();
+      renderState(data.state);
+    }
+
+    function renderState(state) {
+      cells.forEach((cell, i) => {
+        const value = state.board[i];
+        cell.textContent = value || '';
+        cell.className = 'cell' + (value ? ' taken ' + value.toLowerCase() : '');
+      });
+
+      statusEl.className = 'status-bar';
+
+      if (state.winner) {
+        statusEl.textContent = `¡${state.winner} gana la partida!`;
+        statusEl.classList.add('win');
+        scores[state.winner]++;
+        document.getElementById('score-' + state.winner.toLowerCase()).textContent = scores[state.winner];
+        if (state.winLine) {
+          state.winLine.forEach(i => cells[i].classList.add('win-cell'));
+        }
+      } else if (state.isDraw) {
+        statusEl.textContent = '¡Empate!';
+        statusEl.classList.add('draw');
+        scores.draw++;
+        document.getElementById('score-draw').textContent = scores.draw;
+      } else {
+        statusEl.textContent = `Turno de ${state.currentPlayer}`;
+      }
+    }
+
+    cells.forEach(cell => {
+      cell.addEventListener('click', () => {
+        const index = parseInt(cell.dataset.index, 10);
+        makeMove(index);
+      });
+    });
+
+    btnReset.addEventListener('click', resetGame);
+
+    fetchState();
+  </script>
+</body>
+</html>
