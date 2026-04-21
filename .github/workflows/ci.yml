@@ -13,6 +13,10 @@ jobs:
   test:
     name: Lint, Build & Test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # GitHub no permite expresiones aquí; debe ser una ruta literal.
+        working-directory: tictactoe
 
     steps:
       - name: Checkout
@@ -23,6 +27,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: tictactoe/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -40,4 +45,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage/
+          path: tictactoe/coverage/
